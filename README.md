@@ -1,0 +1,2 @@
+# GalGameTranslator
+使用Tesseract-OCR识别字符并通过开源翻译API进行翻译
