@@ -25,7 +25,7 @@ class Shots2String:
     running = False
     running_sleep = 1
     Thread = None
-    cache = []
+    cache = dict()
     Lock = threading.Lock()
     logger = myLog.LoggerCreator.get_default_logger(name='Shots2String')
     pytesseract.pytesseract.tesseract_cmd = utils.file2list(os.path.join(API_DIR, 'tesseract_path.txt'))[0]
@@ -35,19 +35,20 @@ class Shots2String:
 
     def add_shot(self, task: ShotToStringTask, shot_id: int = None):
         max_len = 100
-        if shot_id is None:
-            for shot_id in range(max_len):
-                if shot_id not in self.__shots_dict.keys():
-                    break
+        cs = set(range(max_len)).difference(self.__shots_dict.keys(), self.cache.keys())
+        if shot_id is None and cs:
+            shot_id = cs.pop()
+        else:
+            shot_id = -1
         self.logger.info("Adding shot %s ...", str(shot_id))
-        if len(self.__shots_dict) >= max_len:
+        if len(self.__shots_dict) >= max_len or shot_id < 0:
             self.logger.warning("Add shot failed, there is too many shots.")
             return False
         if shot_id in self.__shots_dict.keys():
             self.logger.warning("Add shot failed, the shot_id: %s is existed.", str(shot_id))
             return False
         self.Lock.acquire()
-        self.cache.append((1, (task, shot_id)))
+        self.cache[shot_id] = (1, task)
         self.Lock.release()
         return shot_id
 
@@ -57,7 +58,7 @@ class Shots2String:
             self.logger.warning("Remove failed, the shot_id: %s is not existed.", str(shot_id))
             return False
         self.Lock.acquire()
-        self.cache.append((-1, (shot_id,)))
+        self.cache[shot_id] = (-1,)
         self.Lock.release()
         return True
 
@@ -67,7 +68,7 @@ class Shots2String:
             self.logger.warning("Update shot failed, the shot_id: %s is not existed.", str(shot_id))
             return False
         self.Lock.acquire()
-        self.cache.append((0, (task, shot_id)))
+        self.cache[shot_id] = (0, task)
         self.Lock.release()
         return True
 
@@ -87,14 +88,14 @@ class Shots2String:
 
     def __operate_all(self):
         self.Lock.acquire()
-        for _ in range(len(self.cache)):
-            op_code, op_pkg = self.cache.pop()
+        for shot_id in self.cache.keys():
+            op_code = self.cache[shot_id][0]
             if op_code == 1:
-                self.__add_shot(*op_pkg)
+                self.__add_shot(self.cache[shot_id][1], shot_id)
             elif op_code == -1:
-                self.__remove_shot(*op_pkg)
+                self.__remove_shot(shot_id)
             elif op_code == 0:
-                self.__update_shot(*op_pkg)
+                self.__update_shot(self.cache[shot_id][1], shot_id)
             else:
                 self.logger.error("Invalid operation.")
         self.Lock.release()

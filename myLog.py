@@ -2,6 +2,7 @@ import logging
 import logging.handlers
 import os.path
 import sys
+import tkinter.messagebox as tmsg
 
 LOG_PATH = 'log'
 
@@ -27,4 +28,30 @@ class LoggerCreator:
 
         mylogger.addHandler(file_handler)
         mylogger.addHandler(console_handler)
-        return mylogger
+        return MyLogger(mylogger)
+
+
+class MyLogger:
+    def __init__(self, logger: logging.Logger):
+        self.logger = logger
+
+    def log(self, level: int, msg: str, *args):
+        self.logger.log(level, msg, *args)
+
+    def debug(self, msg: str, *args):
+        self.logger.debug(msg, *args)
+
+    def info(self, msg: str, *args):
+        self.logger.info(msg, *args)
+
+    def warning(self, msg: str, *args):
+        self.logger.warning(msg, *args)
+        tmsg.showwarning("警告", msg % args)
+
+    def error(self, msg, *args):
+        self.logger.error(msg, *args)
+        tmsg.showerror("错误", msg % args)
+
+    def critical(self, msg: str, *args):
+        self.logger.critical(msg, *args)
+        tmsg.showerror("崩溃", msg % args)

@@ -36,7 +36,7 @@ class TranslationCore:
     running = False
     running_sleep = 1
     Thread = None
-    cache = []
+    cache = dict()
     Lock = threading.Lock()
     logger = myLog.LoggerCreator.get_default_logger(name='TranslationCore')
 
@@ -51,19 +51,20 @@ class TranslationCore:
 
     def add_translate_task(self, task: TranslationTask, task_id: int = None):
         max_len = 100
-        if task_id is None:
-            for task_id in range(max_len):
-                if task_id not in self.__task_dict.keys():
-                    break
+        cs = set(range(max_len)).difference(self.__task_dict.keys(), self.cache.keys())
+        if task_id is None and cs:
+            task_id = cs.pop()
+        else:
+            task_id = -1
         self.logger.info("Adding translate task %s ...", str(task_id))
-        if len(self.__task_dict) >= max_len:
+        if len(self.__task_dict) >= max_len or task_id < 0:
             self.logger.warning("Add task failed, There is too many tasks.")
             return False
         if task_id in self.__task_dict.keys():
             self.logger.warning("Add task failed, the task_id: %s is existed.", str(task_id))
             return False
         self.Lock.acquire()
-        self.cache.append((1, (task, task_id)))
+        self.cache[task_id] = (1, task)
         self.Lock.release()
         return task_id
 
@@ -73,7 +74,7 @@ class TranslationCore:
             self.logger.warning("Remove failed, the task_id: %s is not existed.", str(task_id))
             return False
         self.Lock.acquire()
-        self.cache.append((-1, (task_id,)))
+        self.cache[task_id] = (-1,)
         self.Lock.release()
         return True
 
@@ -92,14 +93,15 @@ class TranslationCore:
 
     def __operate_all(self):
         self.Lock.acquire()
-        for _ in range(len(self.cache)):
-            op_code, op_pkg = self.cache.pop()
+        for task_id in self.cache.keys():
+            op_code = self.cache[task_id][0]
             if op_code == 1:
-                self.__add_translate_task(*op_pkg)
+                self.__add_translate_task(self.cache[task_id][1], task_id)
             elif op_code == -1:
-                self.__remove_translate_task(*op_pkg)
+                self.__remove_translate_task(task_id)
             else:
                 self.logger.error("Invalid operation.")
+        self.cache = dict()
         self.Lock.release()
 
     def check_task_exist(self, task_id: int):
@@ -165,7 +167,7 @@ class TranslationCore:
 
     def translate(self, query: str, from_lang: str = '', to_lang: str = '', use: str = ''):
         if not query.strip():
-            return ''
+            return '', from_lang, to_lang, use
         if use.strip():
             use = self.__add_use(use)
         try:
@@ -255,4 +257,4 @@ if __name__ == '__main__':
                 break
         if inputStr[-3:] == 'HS\n':
             break
-        print("翻译的结果为：\n" + translator.translate(inputStr[:-3]))
+        print("翻译的结果为：\n" + str(translator.translate(inputStr[:-3])))
